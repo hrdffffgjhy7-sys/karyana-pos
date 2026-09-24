@@ -1,0 +1,70 @@
+ ⚠ Warning: Next.js inferred your workspace root, but it may not be correct.
+ We detected multiple lockfiles and selected the directory of C:\Users\PARAS TECH\package-lock.json as the root directory.
+ To silence this warning, set `outputFileTracingRoot` in your Next.js config, or consider removing one of the lockfiles if it's not needed.
+   See https://nextjs.org/docs/app/api-reference/config/next-config-js/output#caveats for more information.
+ Detected additional lockfiles: 
+   * C:\Users\PARAS TECH\Desktop\New folder\Imranarain\package-lock.json
+
+ ⨯ Error: ENOENT: no such file or directory, open 'C:\Users\PARAS TECH\Desktop\New folder\Imranarain\.next\required-server-files.json'
+    at async M (C:\Users\PARAS TECH\Desktop\New folder\Imranarain\.next\server\app\page.js:1:4508) {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\PARAS TECH\\Desktop\\New folder\\Imranarain\\.next\\required-server-files.json'
+}
+ ⨯ Error: ENOENT: no such file or directory, open 'C:\Users\PARAS TECH\Desktop\New folder\Imranarain\.next\required-server-files.json'
+    at async (C:\Users\PARAS TECH\Desktop\New folder\Imranarain\.next\server\pages\_error.js:1:6810) {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\PARAS TECH\\Desktop\\New folder\\Imranarain\\.next\\required-server-files.json'
+}
+ ⨯ Error: ENOENT: no such file or directory, open 'C:\Users\PARAS TECH\Desktop\New folder\Imranarain\.next\required-server-files.json'
+    at async M (C:\Users\PARAS TECH\Desktop\New folder\Imranarain\.next\server\app\_not-found\page.js:1:2307) {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\PARAS TECH\\Desktop\\New folder\\Imranarain\\.next\\required-server-files.json'
+}
+ ⨯ Error: ENOENT: no such file or directory, open 'C:\Users\PARAS TECH\Desktop\New folder\Imranarain\.next\required-server-files.json'
+    at async M (C:\Users\PARAS TECH\Desktop\New folder\Imranarain\.next\server\app\page.js:1:4508) {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\PARAS TECH\\Desktop\\New folder\\Imranarain\\.next\\required-server-files.json'
+}
+ ⨯ Error: ENOENT: no such file or directory, open 'C:\Users\PARAS TECH\Desktop\New folder\Imranarain\.next\required-server-files.json'
+    at async (C:\Users\PARAS TECH\Desktop\New folder\Imranarain\.next\server\pages\_error.js:1:6810) {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\PARAS TECH\\Desktop\\New folder\\Imranarain\\.next\\required-server-files.json'
+}
+ ⨯ Error: ENOENT: no such file or directory, open 'C:\Users\PARAS TECH\Desktop\New folder\Imranarain\.next\required-server-files.json'
+    at async M (C:\Users\PARAS TECH\Desktop\New folder\Imranarain\.next\server\app\page.js:1:4508) {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\PARAS TECH\\Desktop\\New folder\\Imranarain\\.next\\required-server-files.json'
+}
+ ⨯ Error: ENOENT: no such file or directory, open 'C:\Users\PARAS TECH\Desktop\New folder\Imranarain\.next\required-server-files.json'
+    at async (C:\Users\PARAS TECH\Desktop\New folder\Imranarain\.next\server\pages\_error.js:1:6810) {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\PARAS TECH\\Desktop\\New folder\\Imranarain\\.next\\required-server-files.json'
+}
+ ⨯ Error: ENOENT: no such file or directory, open 'C:\Users\PARAS TECH\Desktop\New folder\Imranarain\.next\required-server-files.json'
+    at async M (C:\Users\PARAS TECH\Desktop\New folder\Imranarain\.next\server\app\page.js:1:4508) {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\PARAS TECH\\Desktop\\New folder\\Imranarain\\.next\\required-server-files.json'
+}
+ ⨯ Error: ENOENT: no such file or directory, open 'C:\Users\PARAS TECH\Desktop\New folder\Imranarain\.next\required-server-files.json'
+    at async (C:\Users\PARAS TECH\Desktop\New folder\Imranarain\.next\server\pages\_error.js:1:6810) {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\PARAS TECH\\Desktop\\New folder\\Imranarain\\.next\\required-server-files.json'
+}
