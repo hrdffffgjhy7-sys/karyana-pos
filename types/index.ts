@@ -1,4 +1,17 @@
-export type Unit = "Piece" | "Kg" | "Gram" | "Liter" | "Pack" | "Dozen";
+export type Unit =
+  | "Gram"
+  | "Kg"
+  | "Piece"
+  | "Bottle"
+  | "Packet"
+  | "Pack"
+  | "Box"
+  | "Tube"
+  | "Sachet"
+  | "Dozen"
+  | "ML"
+  | "Liter"
+  | "Half Liter";
 
 export type PaymentMethod =
   | "Cash"

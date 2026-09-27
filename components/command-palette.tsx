@@ -6,7 +6,7 @@ import { Search, Package, User, FileText, CornerDownLeft } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { db } from "@/db/database";
-import { perKgPrice } from "@/db/products";
+import { isWeightUnit, perKgPrice, unitLabel } from "@/db/products";
 import { useDebounce } from "@/hooks/use-debounce";
 import { cn } from "@/lib/utils";
 
@@ -58,7 +58,8 @@ export function CommandPalette() {
       if (cancelled) return;
       const results: Item[] = [];
       for (const p of products.filter((p) => (p.name + (p.sku || "")).toLowerCase().includes(q)).slice(0, 5)) {
-        results.push({ type: "product", id: p.id!, title: p.name, subtitle: `Rs. ${perKgPrice(p.sellingPrice)}/KG • Stock: ${p.stock} g`, href: "/products" });
+        const price = isWeightUnit(p.unit) ? perKgPrice(p.sellingPrice) : p.sellingPrice;
+        results.push({ type: "product", id: p.id!, title: p.name, subtitle: `Rs. ${price}/${unitLabel(p.unit)} • Stock: ${p.stock} ${unitLabel(p.unit)}`, href: "/products" });
       }
       for (const c of customers.filter((c) => (c.name + (c.phone || "")).toLowerCase().includes(q)).slice(0, 5)) {
         results.push({ type: "customer", id: c.id!, title: c.name, subtitle: c.phone || "No phone", href: `/customers/${c.id}` });

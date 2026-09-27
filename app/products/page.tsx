@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Search, Pencil, Trash2, PackagePlus, ArrowDownUp, FileDown, FileText, Package } from "lucide-react";
+import { Search, Pencil, Trash2, PackagePlus, ArrowDownUp, FileDown, FileText, Package, ListPlus } from "lucide-react";
 import { Shell } from "@/components/layout/shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,18 +46,25 @@ import {
   listProducts,
   getProductCategories,
   addProduct,
+  addProductsBulk,
   updateProduct,
   deleteProduct,
   adjustStock,
   perKgPrice,
+  isWeightUnit,
+  unitLabel,
+  unitPriceLabel,
+  UNIT_GROUPS,
 } from "@/db/products";
 import { generateProductsPDF } from "@/lib/pdf";
 import { downloadCsv } from "@/lib/csv";
 import { validateProduct } from "@/lib/validation";
 import { formatNumber } from "@/lib/format";
-import type { Product } from "@/types";
+import { getKaryanaList, KARYANA_LIST_SIZE } from "@/lib/seedData";
+import type { Product, Unit } from "@/types";
 
-// Base unit is GRAM. Prices are stored per gram, stock is stored in grams.
+// Weight products (Gram/Kg) store price per gram and stock in grams.
+// Every other unit (Bottle, Packet, ML, ...) stores price per unit and a plain count.
 const KG = 1000;
 
 type EmptyProductForm = {
@@ -65,6 +72,7 @@ type EmptyProductForm = {
   sku: string;
   barcode: string;
   category: string;
+  unit: Unit;
   purchasePrice: string;
   sellingPrice: string;
   stock: string;
@@ -76,6 +84,7 @@ const EMPTY: EmptyProductForm = {
   sku: "",
   barcode: "",
   category: "",
+  unit: "Gram",
   purchasePrice: "",
   sellingPrice: "",
   stock: "0",
@@ -104,7 +113,9 @@ export default function ProductsPage() {
   const [stockNote, setStockNote] = React.useState("");
 
   const [deleteTarget, setDeleteTarget] = React.useState<Product | null>(null);
+  const [seedOpen, setSeedOpen] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
+  const [seeding, setSeeding] = React.useState(false);
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -125,34 +136,38 @@ export default function ProductsPage() {
     setFormOpen(true);
   };
 
+  const formIsWeight = isWeightUnit(form.unit);
+
   const openEdit = (p: Product) => {
     setEditTarget(p);
+    const weight = isWeightUnit(p.unit);
     setForm({
       name: p.name,
       sku: p.sku || "",
       barcode: p.barcode || "",
       category: p.category || "",
-      purchasePrice: String(perKgPrice(p.purchasePrice ?? 0)),
-      sellingPrice: String(perKgPrice(p.sellingPrice ?? 0)),
-      stock: String((p.stock ?? 0) / KG),
-      minStock: String((p.minStock ?? 0) / KG),
+      unit: p.unit,
+      purchasePrice: String(weight ? perKgPrice(p.purchasePrice ?? 0) : p.purchasePrice ?? 0),
+      sellingPrice: String(weight ? perKgPrice(p.sellingPrice ?? 0) : p.sellingPrice ?? 0),
+      stock: String(weight ? (p.stock ?? 0) / KG : p.stock ?? 0),
+      minStock: String(weight ? (p.minStock ?? 0) / KG : p.minStock ?? 0),
     });
     setFormError(null);
     setFormOpen(true);
   };
 
   const saveProduct = async () => {
-    const sellKg = parseFloat(form.sellingPrice) || 0;
-    const buyKg = parseFloat(form.purchasePrice) || 0;
-    const stockKg = parseFloat(form.stock) || 0;
-    const minKg = parseFloat(form.minStock) || 0;
-    const data = {
-      name: form.name.trim(),
-      sellingPrice: sellKg / KG,
-      purchasePrice: buyKg / KG,
-      stock: Math.round(stockKg * KG),
-    };
-    const err = validateProduct(data);
+    const sellInput = parseFloat(form.sellingPrice) || 0;
+    const buyInput = parseFloat(form.purchasePrice) || 0;
+    const stockInput = parseFloat(form.stock) || 0;
+    const minInput = parseFloat(form.minStock) || 0;
+    const weight = isWeightUnit(form.unit);
+    // Weight: entered in KG, stored per gram / in grams. Others: stored as entered.
+    const purchasePrice = weight ? buyInput / KG : buyInput;
+    const sellingPrice = weight ? sellInput / KG : sellInput;
+    const stock = weight ? Math.round(stockInput * KG) : stockInput;
+    const minStock = weight ? Math.round(minInput * KG) : minInput;
+    const err = validateProduct({ name: form.name.trim(), sellingPrice, purchasePrice, stock });
     if (err) {
       setFormError(err.message);
       return;
@@ -164,11 +179,11 @@ export default function ProductsPage() {
         sku: form.sku.trim(),
         barcode: form.barcode.trim(),
         category: form.category.trim() || "General",
-        purchasePrice: buyKg / KG,
-        sellingPrice: sellKg / KG,
-        stock: Math.round(stockKg * KG),
-        minStock: Math.round(minKg * KG),
-        unit: "Gram" as const,
+        purchasePrice,
+        sellingPrice,
+        stock,
+        minStock,
+        unit: form.unit,
       };
       if (editTarget) {
         await updateProduct(editTarget.id!, payload);
@@ -194,7 +209,7 @@ export default function ProductsPage() {
     }
     try {
       await adjustStock(stockTarget.id!, d, stockNote.trim());
-      toast({ title: "Stock updated", description: `${stockTarget.name} stock changed by ${formatNumber(d)}.`, variant: "success" });
+      toast({ title: "Stock updated", description: `${stockTarget.name} stock changed by ${formatNumber(d)} ${unitLabel(stockTarget.unit)}.`, variant: "success" });
       setStockOpen(false);
       setDelta("");
       setStockNote("");
@@ -216,10 +231,45 @@ export default function ProductsPage() {
     }
   };
 
+  const handleSeedKaryana = async () => {
+    setSeeding(true);
+    try {
+      const existing = new Set((await listProducts()).map((p) => p.name.toLowerCase()));
+      const fresh = getKaryanaList().filter((p) => !existing.has(p.name.toLowerCase()));
+      const added = await addProductsBulk(fresh);
+      setSeedOpen(false);
+      toast({
+        title: `${added} karyana products added`,
+        description:
+          added === 0
+            ? "Every karyana product is already in the inventory."
+            : `${added} of ${KARYANA_LIST_SIZE} items added — prices per KG, stock in grams.`,
+        variant: "success",
+      });
+      load();
+    } catch (e) {
+      toast({ title: "Seed failed", description: (e as Error).message, variant: "destructive" });
+    }
+    setSeeding(false);
+  };
+
+  const displayPrice = (perGramOrUnit: number, unit: Unit) =>
+    isWeightUnit(unit) ? perKgPrice(perGramOrUnit) : perGramOrUnit;
+
   const exportCsv = () => {
     downloadCsv(
-      ["Product", "SKU", "Barcode", "Category", "Purchase (Rs/KG)", "Selling (Rs/KG)", "Stock (g)", "Min Stock (g)", "Unit"],
-      products.map((p) => [p.name, p.sku, p.barcode, p.category, perKgPrice(p.purchasePrice), perKgPrice(p.sellingPrice), p.stock, p.minStock, p.unit]),
+      ["Product", "SKU", "Barcode", "Category", "Purchase Price", "Selling Price", "Stock", "Min Stock", "Unit"],
+      products.map((p) => [
+        p.name,
+        p.sku,
+        p.barcode,
+        p.category,
+        displayPrice(p.purchasePrice, p.unit),
+        displayPrice(p.sellingPrice, p.unit),
+        formatNumber(p.stock),
+        formatNumber(p.minStock),
+        p.unit,
+      ]),
       "IMRAN-ARAIN-PRODUCTS.csv"
     );
     toast({ title: "Products CSV downloaded", variant: "success" });
@@ -230,8 +280,8 @@ export default function ProductsPage() {
     generateProductsPDF(
       products.map((p) => ({
         ...p,
-        purchasePrice: perKgPrice(p.purchasePrice),
-        sellingPrice: perKgPrice(p.sellingPrice),
+        purchasePrice: displayPrice(p.purchasePrice, p.unit),
+        sellingPrice: displayPrice(p.sellingPrice, p.unit),
       })),
       settings,
       category
@@ -248,6 +298,7 @@ export default function ProductsPage() {
           <>
             <Button variant="outline" onClick={exportCsv}><FileText /> CSV</Button>
             <Button variant="outline" onClick={exportPdf}><FileDown /> PDF</Button>
+            <Button variant="outline" onClick={() => setSeedOpen(true)} disabled={seeding}><ListPlus /> {KARYANA_LIST_SIZE} Karyana</Button>
             <Button onClick={openAdd}><PackagePlus /> Add Product</Button>
           </>
         }
@@ -299,9 +350,9 @@ export default function ProductsPage() {
                       <TableCell className="font-medium">{p.name}</TableCell>
                       <TableCell className="text-muted-foreground">{p.sku || "—"}{p.barcode ? ` / ${p.barcode}` : ""}</TableCell>
                       <TableCell>{p.category}</TableCell>
-                      <TableCell className="text-right text-muted-foreground">{formatNumber(perKgPrice(p.purchasePrice))}/kg</TableCell>
-                      <TableCell className="text-right font-medium">{formatNumber(perKgPrice(p.sellingPrice))}/kg</TableCell>
-                      <TableCell className="text-right">{formatNumber(p.stock)} g</TableCell>
+                      <TableCell className="text-right text-muted-foreground">{formatNumber(displayPrice(p.purchasePrice, p.unit))}/{unitLabel(p.unit)}</TableCell>
+                      <TableCell className="text-right font-medium">{formatNumber(displayPrice(p.sellingPrice, p.unit))}/{unitLabel(p.unit)}</TableCell>
+                      <TableCell className="text-right">{formatNumber(p.stock)} {unitLabel(p.unit)}</TableCell>
                       <TableCell>
                         {p.stock <= 0 ? (
                           <Badge variant="destructive">Out of Stock</Badge>
@@ -362,22 +413,40 @@ export default function ProductsPage() {
               </datalist>
             </div>
             <div>
-              <Label>Purchase Price (Rs. per KG)</Label>
+              <Label>Unit</Label>
+              <Select
+                value={form.unit}
+                onChange={(e) => setForm({ ...form, unit: e.target.value as Unit })}
+                className="mt-1"
+              >
+                {UNIT_GROUPS.map((group) => (
+                  <optgroup key={group.label} label={group.label}>
+                    {group.units.map((u) => (
+                      <option key={u} value={u}>{u}</option>
+                    ))}
+                  </optgroup>
+                ))}
+              </Select>
+            </div>
+            <div>
+              <Label>Purchase Price ({unitPriceLabel(form.unit)})</Label>
               <Input type="number" min={0} value={form.purchasePrice} onChange={(e) => setForm({ ...form, purchasePrice: e.target.value })} className="mt-1" />
             </div>
             <div>
-              <Label>Selling Price (Rs. per KG) *</Label>
+              <Label>Selling Price ({unitPriceLabel(form.unit)}) *</Label>
               <Input type="number" min={0} value={form.sellingPrice} onChange={(e) => setForm({ ...form, sellingPrice: e.target.value })} className="mt-1" />
             </div>
-            <p className="sm:col-span-2 rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
-              Price is stored per gram (1 KG price ÷ 1000) and stock is stored in grams (1 KG = 1000 g). Billing uses grams — Aadha Pao 125 g, 1 Pao 250 g, Aadha Kilo 500 g, 1 Kilo 1000 g.
+            <p className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground sm:col-span-2">
+              {formIsWeight
+                ? "Weight items: price is stored per gram (1 KG price ÷ 1000) and stock in grams (1 KG = 1000 g). Billing uses grams — Aadha Pao 125 g, 1 Pao 250 g, Aadha Kilo 500 g, 1 Kilo 1000 g."
+                : `Counted items: price and stock are stored per ${unitLabel(form.unit)} and billed one ${unitLabel(form.unit)} at a time.`}
             </p>
             <div>
-              <Label>Stock (KG)</Label>
-              <Input type="number" min={0} value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} className="mt-1" placeholder="e.g. 40" />
+              <Label>Stock ({formIsWeight ? "KG" : unitLabel(form.unit)})</Label>
+              <Input type="number" min={0} value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} className="mt-1" placeholder={formIsWeight ? "e.g. 40" : "e.g. 24"} />
             </div>
             <div>
-              <Label>Minimum Stock (KG)</Label>
+              <Label>Minimum Stock ({formIsWeight ? "KG" : unitLabel(form.unit)})</Label>
               <Input type="number" min={0} value={form.minStock} onChange={(e) => setForm({ ...form, minStock: e.target.value })} className="mt-1" />
             </div>
           </div>
@@ -394,14 +463,18 @@ export default function ProductsPage() {
           <DialogHeader>
             <DialogTitle>Stock Adjustment</DialogTitle>
             <DialogDescription>
-              {stockTarget?.name} — current stock {stockTarget ? `${formatNumber(stockTarget.stock)} g` : ""}
+              {stockTarget?.name} — current stock {stockTarget ? `${formatNumber(stockTarget.stock)} ${unitLabel(stockTarget.unit)}` : ""}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">
             <div>
-              <Label>Adjust By (grams)</Label>
+              <Label>Adjust By ({stockTarget && isWeightUnit(stockTarget.unit) ? "grams" : unitLabel(stockTarget?.unit ?? "Piece")})</Label>
               <Input type="number" value={delta} onChange={(e) => setDelta(e.target.value)} placeholder="e.g. +1000 or -250" className="mt-1" autoFocus />
-              <p className="mt-1 text-xs text-muted-foreground">1 KG = 1000 g. Positive adds stock, negative removes stock.</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {stockTarget && isWeightUnit(stockTarget.unit)
+                  ? "1 KG = 1000 g. Positive adds stock, negative removes stock."
+                  : "Positive adds stock, negative removes stock."}
+              </p>
             </div>
             <div>
               <Label>Note</Label>
@@ -414,6 +487,25 @@ export default function ProductsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={seedOpen} onOpenChange={(o) => !o && !seeding && setSeedOpen(false)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Add {KARYANA_LIST_SIZE} karyana products?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Common grocery items (atta, rice, dal, spices, oil, drinks, household, personal care) are added with
+              default Rs/KG prices and gram stock. Products already in your inventory are skipped, and nothing is
+              overwritten.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={seeding}>Cancel</AlertDialogCancel>
+            <AlertDialogAction disabled={seeding} onClick={handleSeedKaryana}>
+              {seeding ? "Adding…" : "Add products"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
         <AlertDialogContent>

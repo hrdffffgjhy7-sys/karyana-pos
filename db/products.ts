@@ -61,6 +61,30 @@ export async function addProduct(
   return id;
 }
 
+export async function addProductsBulk(
+  items: Omit<Product, "id" | "createdAt" | "updatedAt">[]
+): Promise<number> {
+  if (items.length === 0) return 0;
+  const now = Date.now();
+  return db.transaction("rw", db.products, db.stockMovements, async () => {
+    const ids = await db.products.bulkAdd(
+      items.map((item) => ({ ...item, createdAt: now, updatedAt: now })),
+      { allKeys: true }
+    );
+    await db.stockMovements.bulkAdd(
+      ids.map((productId, i) => ({
+        productId,
+        productName: items[i].name,
+        type: "init" as const,
+        quantity: items[i].stock,
+        note: "Karyana list seed",
+        date: now,
+      }))
+    );
+    return ids.length;
+  });
+}
+
 export async function updateProduct(
   id: number,
   data: Partial<Product>
@@ -104,13 +128,31 @@ export async function getLowStockProducts(): Promise<Product[]> {
 export async function countProducts(): Promise<number> {
   return db.products.count();
 }
-export const UNITS: Unit[] = ["Piece", "Kg", "Gram", "Liter", "Pack", "Dozen"];
+export const UNIT_GROUPS: { label: string; units: Unit[] }[] = [
+  { label: "Weight", units: ["Gram", "Kg"] },
+  { label: "Pieces", units: ["Piece", "Bottle", "Packet", "Pack", "Box", "Tube", "Sachet", "Dozen"] },
+  { label: "Liquid", units: ["ML", "Liter", "Half Liter"] },
+];
 
-export const WEIGHT_UNITS: Unit[] = ["Gram", "Kg"];
+export const UNITS: Unit[] = UNIT_GROUPS.flatMap((g) => g.units);
+
+export const WEIGHT_UNITS: Unit[] = UNIT_GROUPS[0].units;
 export const GRAMS_PER_KG = 1000;
 
 export function isWeightUnit(unit: Unit): boolean {
   return WEIGHT_UNITS.includes(unit);
+}
+
+// Weight products are billed by gram and shown in Kg; everything else is
+// counted and priced in its own unit (Bottle, Packet, ML, ...).
+export function unitLabel(unit: Unit): string {
+  if (unit === "Kg") return "kg";
+  if (unit === "Gram") return "g";
+  return unit;
+}
+
+export function unitPriceLabel(unit: Unit): string {
+  return isWeightUnit(unit) ? "Rs/KG" : `Rs/${unitLabel(unit)}`;
 }
 
 export function perGramPrice(kgPrice: number): number {

@@ -33,7 +33,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
 import { useSettings } from "@/hooks/use-settings";
 import { useDebounce } from "@/hooks/use-debounce";
-import { listProducts, getProductCategories, isWeightUnit, perKgPrice, GRAM_PRESETS } from "@/db/products";
+import { listProducts, getProductCategories, isWeightUnit, perKgPrice, unitLabel, GRAM_PRESETS } from "@/db/products";
 import { listCustomers } from "@/db/customers";
 import { createBill, getCustomerRunningBalanceById } from "@/db/bills";
 import { paymentMethods } from "@/db/database";
@@ -151,7 +151,33 @@ export default function NewBillPage() {
   };
 
   const addToCart = (p: Product) => {
-    addGramsToCart(p, GRAM_PRESETS[1].grams);
+    if (isWeightUnit(p.unit)) {
+      addGramsToCart(p, GRAM_PRESETS[1].grams);
+      return;
+    }
+    // Counted units (Piece, Bottle, Packet, ML, ...) are billed one unit at a time.
+    const disableNeg = !settings?.allowNegativeStock;
+    if (disableNeg && qtyOf(p.id!) + 1 > p.stock) {
+      toast({ title: "Not enough stock", description: `Only ${formatNumber(p.stock)} ${unitLabel(p.unit)} available.`, variant: "destructive" });
+      return;
+    }
+    setCart((prev) => {
+      const existing = prev.find((c) => c.productId === p.id!);
+      if (existing) {
+        return prev.map((c) => (c.productId === p.id! ? { ...c, quantity: c.quantity + 1 } : c));
+      }
+      return [
+        ...prev,
+        {
+          productId: p.id!,
+          name: p.name,
+          quantity: 1,
+          unitPrice: p.sellingPrice,
+          unit: unitLabel(p.unit),
+          stock: p.stock,
+        },
+      ];
+    });
   };
 
   const updateQty = (productId: number, productStock: number, newQty: number) => {
@@ -161,7 +187,8 @@ export default function NewBillPage() {
     }
     const disableNeg = !settings?.allowNegativeStock;
     if (disableNeg && newQty > productStock) {
-      toast({ title: "Not enough stock", description: `Only ${formatNumber(productStock)} g available.`, variant: "destructive" });
+      const unit = cart.find((c) => c.productId === productId)?.unit ?? "g";
+      toast({ title: "Not enough stock", description: `Only ${formatNumber(productStock)} ${unit} available.`, variant: "destructive" });
       return;
     }
     setCart((prev) => prev.map((c) => (c.productId === productId ? { ...c, quantity: newQty } : c)));
@@ -326,11 +353,13 @@ export default function NewBillPage() {
                       )}
                     </div>
                     <div className="mt-2 flex items-end justify-between">
-                      <p className="text-base font-bold text-primary">Rs. {formatNumber(perKgPrice(p.sellingPrice))}</p>
-                      <p className="text-xs text-muted-foreground">/ KG</p>
+                      <p className="text-base font-bold text-primary">
+                        Rs. {formatNumber(isWeightUnit(p.unit) ? perKgPrice(p.sellingPrice) : p.sellingPrice)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">/ {isWeightUnit(p.unit) ? "KG" : unitLabel(p.unit)}</p>
                     </div>
                     <p className={cn("mt-1 text-xs", low ? "font-medium text-amber-600 dark:text-amber-400" : "text-muted-foreground")}>
-                      {p.stock <= 0 ? "Out of Stock" : `Stock: ${formatNumber(p.stock)} g`}
+                      {p.stock <= 0 ? "Out of Stock" : `Stock: ${formatNumber(p.stock)} ${unitLabel(p.unit)}`}
                     </p>
                   </button>
                 );
@@ -415,7 +444,7 @@ export default function NewBillPage() {
                             value={c.quantity}
                             onChange={(e) => updateQty(c.productId, c.stock, parseFloat(e.target.value) || 0)}
                             className="h-8 w-16 border-0 bg-transparent text-center text-sm font-semibold focus:outline-none"
-                            title="Custom grams (e.g. 100, 50)"
+                            title={c.unit === "g" ? "Custom grams (e.g. 100, 50)" : `Custom ${c.unit} count`}
                           />
                           <button onClick={() => updateQty(c.productId, c.stock, c.quantity + 1)} className="flex h-8 w-8 items-center justify-center text-muted-foreground hover:bg-accent">
                             <Plus className="h-3.5 w-3.5" />
@@ -428,11 +457,12 @@ export default function NewBillPage() {
                             onChange={(e) => updatePrice(c.productId, parseFloat(e.target.value) || 0)}
                             className="h-8 w-20 rounded-lg border bg-background px-2 text-right text-sm focus:outline-none focus:ring-1 focus:ring-ring"
                           />
-                          <span className="text-sm text-muted-foreground">/g</span>
+                          <span className="text-sm text-muted-foreground">/{c.unit}</span>
                         </div>
                         <p className="w-16 text-right text-sm font-bold">{formatNumber(c.quantity * c.unitPrice)}</p>
                       </div>
-                      {/* Fast-sale gram buttons */}
+                      {/* Fast-sale gram buttons — weight items only */}
+                      {c.unit === "g" && (
                       <div className="mt-2 grid grid-cols-4 gap-1">
                         {GRAM_PRESETS.map((q) => (
                           <button
@@ -451,6 +481,7 @@ export default function NewBillPage() {
                           </button>
                         ))}
                       </div>
+                      )}
                     </div>
                   ))}
                 </div>
